@@ -1,0 +1,6 @@
+framework module BigFileMultiUploads {
+  umbrella header "BigFileMultiUploads-umbrella.h"
+
+  export *
+  module * { export * }
+}

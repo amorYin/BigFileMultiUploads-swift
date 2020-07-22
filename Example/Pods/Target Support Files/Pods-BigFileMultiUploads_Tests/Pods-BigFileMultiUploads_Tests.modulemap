@@ -1,0 +1,6 @@
+framework module Pods_BigFileMultiUploads_Tests {
+  umbrella header "Pods-BigFileMultiUploads_Tests-umbrella.h"
+
+  export *
+  module * { export * }
+}

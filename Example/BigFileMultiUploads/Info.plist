@@ -35,5 +35,22 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string></string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>&quot;asdasdasda&quot;</string>
+	<key>NSCameraUsageDescription</key>
+	<string>&quot;sdasdasdada&quot;</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>&quot;dasdasdasdasdada&quot;</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>&quot;dasdasdas&quot;</string>
+	<key>NSFileProviderPresenceUsageDescription</key>
+	<string>&quot;dadasdasda&quot;</string>
 </dict>
 </plist>

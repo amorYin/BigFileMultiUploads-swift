@@ -1,0 +1,6 @@
+framework module Pods_BigFileMultiUploads_Example {
+  umbrella header "Pods-BigFileMultiUploads_Example-umbrella.h"
+
+  export *
+  module * { export * }
+}
