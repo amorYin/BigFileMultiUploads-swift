@@ -13,7 +13,7 @@ class UUPSliced: NSObject {
     private var mFilePath:String?
     private var mTempName:String?
     private var mTempPath:String?
-    private var mSlicedList:[UUPSlicedItem]
+    internal var mSlicedList:[UUPSlicedItem]
     private var mTempCount:UInt
     private var mCurrentCount:UInt
     
@@ -101,7 +101,7 @@ class UUPSliced: NSObject {
         defer { objc_sync_exit(self) }
         
         if mCurrentCount < mTotalSliced {
-            if mCurrentCount == 0 || mSlicedList.count == (mTempCount - 2) {
+            if mCurrentCount == 0 || mSlicedList.count == (mTempCount / 2) {
                 makeSliced()
             }
         }

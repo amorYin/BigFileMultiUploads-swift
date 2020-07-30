@@ -14,6 +14,7 @@ public class UUPItem: Operation {
     private var isAppSelfResume:Bool = false
     private var mmError:UUPItemErrorType = .NONE
     private var lowTimes:Int = 0
+    private(set) var sendTimes:Int = 0
     internal var mSliced:UUPSliced?
     private(set) var mConfig:UUPConfig?
     private(set) var mReceiver:UUPReceiver?
@@ -24,7 +25,7 @@ public class UUPItem: Operation {
     internal     var mTask:URLSessionTask?
     private      var mSpeedTimer:Timer?
     internal     var mPProgress:Double = 0
-    internal     var mLastProgress:Double = 0
+    internal     var mLastProgress:Int64 = 0
     
     
     private(set) var isMFinish:Bool = false
@@ -34,9 +35,14 @@ public class UUPItem: Operation {
     private(set) var isMPreReady:Bool = false
     internal     var isMReady:Bool = false
     
+    internal     var mMaxLives:Int = 5
+    internal     var mCurrentLives:Int = 0
+    internal     var mRequestList:[UUPConnUpload]
+    
     internal let kBoundary:String = "----WebKitFormBoundaryXGAyMbuVkeaFc916"
     
     private override init() {
+        mRequestList = [UUPConnUpload]()
         super.init()
     }
     
@@ -105,7 +111,7 @@ public class UUPItem: Operation {
     }
     
     public override func start() -> Void {
-        if !isAppSelfPause {
+        if !isAppSelfPause && !isFinished && !isMPaused {
             UUPHeader.log("UUPItem_start")
             willChangeValue(forKey: "isExecuting")
             willChangeValue(forKey: "isCancelled")
@@ -116,12 +122,32 @@ public class UUPItem: Operation {
             isMPaused = false
             isMCancelled = false
             
+            for s in mRequestList{
+                if s.isMFinish {
+                    guard let model_index = mRequestList.index(of: s) else { continue }
+                    mRequestList.remove(at: model_index)
+                }
+            }
+            
             guard let item = mSliced?.nextSlicedItem() else{
-                finsih()
+                guard mRemoteUri != nil else { return }
+                if(mRequestList.count < 1) {
+                    finsih();
+                }
                 return
             }
+            
             mCurrentItem = item
-            startupload();
+            while mCurrentLives < mMaxLives{
+                guard let item = mSliced?.nextSlicedItem() else{
+                    return
+                }
+                item.isSuspend = true
+                let s = UUPConnUpload(a: self,i:item)
+                mRequestList.append(s)
+                s.startupload()
+                mCurrentLives += 1;
+            }
         }
     }
     
@@ -212,7 +238,11 @@ public class UUPItem: Operation {
     
     deinit {
         mSliced = nil
+        mRequestList.removeAll()
         UUPHeader.log("UUPItem_deinit")
+        if mTask != nil {
+            mTask?.cancel()
+        }
     }
 }
 
@@ -224,6 +254,7 @@ extension UUPItem {
         }
         set{
             isAppSelfPause = newValue
+            if(!newValue){ start() }
         }
     }
     
@@ -237,26 +268,29 @@ extension UUPItem {
     }
     
     @objc func calculatProsess(_ timer:Timer) -> Void{
-        if !isMPaused || !isAppPause {
-            guard let weakSelf = timer.userInfo as? UUPItem else{
-                timer.invalidate()
-                return
-            }
-            let tem = (weakSelf.mProgress - weakSelf.mLastProgress) * Double(weakSelf.mSize)
-            weakSelf.mSpeed = fabs(tem)
-            weakSelf.mSpeedStr = UUPUtil.calculateSpeed(weakSelf.mSpeed)
-            weakSelf.mLastProgress = weakSelf.mProgress
+        guard let weakSelf = timer.userInfo as? UUPItem else{
+            timer.invalidate()
+            return
+        }
+        if !isMPaused && !isAppPause {
             
             if weakSelf.mProgress == 0.0{
                 weakSelf.mSpeedStr = "初始化中"
                 weakSelf.lowTimes = 0
-            }else if weakSelf.mProgress >= 1.0 {
+            }else if weakSelf.mProgress >= 0.9999999 {
                 weakSelf.mSpeedStr = "合成中"
                 weakSelf.lowTimes = 0
-            }else if weakSelf.lowTimes >= 10 {
-                weakSelf.mSpeedStr = "网速缓慢 \(weakSelf.mSpeedStr ?? "")"
-                if weakSelf.lowTimes % 10 == 0 {
-                    weakSelf.mError = .LOW_NET
+            }else{
+                sendTimes += 1
+                let tem = Double(weakSelf.mReceiver!.mTotalBytesSent - weakSelf.mLastProgress) / Double(sendTimes)
+                weakSelf.mSpeed = tem
+                weakSelf.mSpeedStr = UUPUtil.calculateSpeed(weakSelf.mSpeed)
+                
+                if weakSelf.lowTimes >= 10 {
+                    weakSelf.mSpeedStr = "网速缓慢 \(weakSelf.mSpeedStr ?? "")"
+                    if weakSelf.lowTimes % 10 == 0 {
+                        weakSelf.mError = .LOW_NET
+                    }
                 }
             }
             
@@ -265,9 +299,13 @@ extension UUPItem {
             }else{
                 weakSelf.lowTimes = 0
             }
-            
-            weakSelf.syncProsess(.RUN_PROSESS)
+        }else{
+            sendTimes = 0
+            weakSelf.mLastProgress = weakSelf.mReceiver!.mTotalBytesSent
+            weakSelf.mSpeedStr = "网络缓慢 0B/s"
         }
+        
+        weakSelf.syncProsess(.RUN_PROSESS)
     }
     
     func syncProsess(_ type:UUPItemRunType) -> Void {
@@ -371,21 +409,18 @@ extension UUPItem {
     func check() -> Void {
         guard mSize <= mConfig!.maxSize else{
             mError = .OVER_MAXSIZE
-            syncProsess(.RUN_ERROR)
             stop()
             return
         }
         
         guard mDuration <= mConfig!.maxDuration else{
             mError = .OVER_MAXDURATION
-            syncProsess(.RUN_ERROR)
             stop()
             return
         }
         
         guard mError == .NONE else {
             mError = .OVER_MAXDURATION
-            syncProsess(.RUN_ERROR)
             stop()
             return
         }
@@ -393,6 +428,7 @@ extension UUPItem {
         if mSession == nil {
             if mReceiver == nil { mReceiver = UUPReceiver.init(self) }
             let config = URLSessionConfiguration.default
+            config.httpMaximumConnectionsPerHost = 5
             mSession = URLSession.init(configuration: config, delegate: mReceiver, delegateQueue: nil)
         }
         

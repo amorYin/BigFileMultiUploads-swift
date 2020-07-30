@@ -13,6 +13,7 @@ public class UUPManager: NSObject {
     private var mDelegate:UUPItfProxy?
     private var mConfig:UUPConfig?
     private var mUploading:OperationQueue?
+    private var mLivesRecord:[UUPItem]?
     private var mRMmanager:UUPNetworkRM?
     private var isForeground:Bool = true
     private var isPause:Bool = false
@@ -78,6 +79,10 @@ public class UUPManager: NSObject {
         NotificationCenter.default.removeObserver(self, name: .UIApplicationDidBecomeActive, object: nil)
         mRMmanager = nil
         mConfig = nil
+        if mLivesRecord != nil {
+            mLivesRecord?.removeAll()
+            mLivesRecord = nil
+        }
         UUPConfig.destory()
         UUPUtil.removeSlicedFile()
         guard let queue = mUploading else {return}
@@ -100,6 +105,13 @@ public class UUPManager: NSObject {
             obj.queuePriority = immd ? .high : .normal
             obj.start(with: self)
         }
+        guard let mr = mLivesRecord else {
+            mLivesRecord = [UUPItem]()
+            mLivesRecord?.append(obj)
+            return
+        }
+        
+        if !mr.contains(obj) { mLivesRecord?.append(obj) }
     }
     
     @objc public func pause() -> Void {
@@ -113,12 +125,20 @@ public class UUPManager: NSObject {
             queue.isSuspended = true
             for (_,s) in queue.operations.enumerated() {
                 UUPHeader.log("UUPManager_pause:\(s)")
-                if s.isConcurrent || s.isExecuting {
+                if !s.isFinished {
                     guard let item:UUPItem = s as? UUPItem else {
                         s.cancel()
-                        return
+                        break
                     }
                     item.isAppPause = true
+                }
+            }
+            
+            guard let mr = mLivesRecord else { return }
+            for (_,s) in mr.enumerated(){
+                UUPHeader.log("UUPManager_pause:\(s)")
+                if !s.isFinished {
+                    s.isAppPause = true
                 }
             }
         }
@@ -129,8 +149,8 @@ public class UUPManager: NSObject {
         defer { objc_sync_exit(self) }
         
         if isPause {
-            isPause = false
             if isForeground && isNetReachable {
+                isPause = false
                 UUPHeader.log("UUPManager_reume")
                 guard let queue = mUploading else {return}
                 for (_,s) in queue.operations.enumerated() {
@@ -138,8 +158,15 @@ public class UUPManager: NSObject {
                         s.start()
                         return
                     }
-                    if (!item.isCancelled || !item.isFinished) && item.isAppPause {
+                    if !s.isFinished {
                         item.isAppPause = false
+                    }
+                }
+                guard let mr = mLivesRecord else { return }
+                for (_,s) in mr.enumerated(){
+                    UUPHeader.log("UUPManager_reume:\(s)")
+                    if !s.isFinished  {
+                        s.isAppPause = false
                     }
                 }
                 queue.isSuspended = false
@@ -189,6 +216,14 @@ extension UUPManager: UUPItfProxyy{
     func onUPFinish(item: UUPItem) {
         guard let delegate = mDelegate else{return}
         delegate.onUPFinish(item: item)
+        guard let mr = mLivesRecord else { return }
+        for (_,s) in mr.enumerated(){
+            if s == item {
+                guard let x = mLivesRecord?.index(of: s) else { return }
+                mLivesRecord?.remove(at: x)
+                return
+            }
+        }
     }
     
     func onUPCancel(item: UUPItem) {

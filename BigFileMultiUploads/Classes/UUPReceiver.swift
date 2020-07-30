@@ -9,7 +9,13 @@ import UIKit
 
 class UUPReceiver: NSObject,URLSessionTaskDelegate {
     weak var mItem:UUPItem?
+    var parms:[String:Double]
+    var lastProgess:Double
+    var mTotalBytesSent:Int64
     private override init() {
+        parms = [String:Double]()
+        mTotalBytesSent = 0
+        lastProgess = 0.0
         super.init()
     }
     
@@ -21,16 +27,36 @@ class UUPReceiver: NSObject,URLSessionTaskDelegate {
     
     deinit {
         UUPHeader.log("UUPReceiver_deinit")
+        parms.removeAll()
         mItem = nil
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
-        let process = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
-        guard let sItem = mItem,let item = sItem.mCurrentItem else {
+    
+        mTotalBytesSent += bytesSent
+        
+        guard let sItem = mItem,let sv = task.currentRequest?.value(forHTTPHeaderField: "current-value"),let cv = task.currentRequest?.value(forHTTPHeaderField: "current-index") else {
             return
         }
-        item.mPProgress = process * item.mProgress
-        sItem.mProgress = sItem.mPProgress + item.mPProgress
-        sItem.syncProsess(.RUN_PROSESS)
+        let process = Double(totalBytesSent) / Double(totalBytesExpectedToSend)
+        let base = Double(sv)! * process
+        parms[cv] = base
+        
+        var current:Double = 0.0
+        
+        for (_,k) in parms.enumerated() {
+            current += k.value
+        }
+//        current = sItem.mPProgress + current
+        if current > sItem.mProgress {sItem.mProgress = current}
+        
+//        if process == 1.0 {
+//            sItem.mPProgress += base
+//            parms.removeValue(forKey: cv)
+//        }
+        if(current - lastProgess > 0.01){//提升性能
+            sItem.syncProsess(.RUN_PROSESS)
+            lastProgess = current
+        }
     }
 }

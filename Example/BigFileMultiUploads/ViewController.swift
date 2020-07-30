@@ -36,7 +36,7 @@ class ViewController: UIViewController,UUPItf {
     }
     
     @objc func onUPFinish(_ item: UUPItem) {
-        print("\(item.mProgress)====0")
+        print("\(item.mRemoteUri)====0")
     }
     
     @objc func onUPProgress(_ item: UUPItem) {

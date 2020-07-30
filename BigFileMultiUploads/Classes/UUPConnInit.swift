@@ -11,7 +11,7 @@ import UIKit
 //UUPConnInit
 extension UUPItem{
     func initupload() -> Void {
-        let urlBase = URL.init(string: "文件初始化接口")
+        let urlBase = URL.init(string: "")
         guard let url = urlBase else {
             return
         }
@@ -23,7 +23,6 @@ extension UUPItem{
 
             defer { self?.willChangeValue(forKey: "isReady");self?.isMReady = true;self?.didChangeValue(forKey: "isReady") }
             guard let weakSelf = self else {return}
-            self?.mSliced = UUPSliced.init(weakSelf)
             guard let mData = data,let result = try? JSONSerialization.jsonObject(with: mData, options:.mutableContainers) as AnyObject else {
                 self?.mError = .BAD_PARAMS
                 self?.initupload()
@@ -35,8 +34,8 @@ extension UUPItem{
                 self?.stop()
                 return
             }
-            
             let useful:AnyObject = result["data"] as AnyObject
+            self?.mSliced = UUPSliced.init(weakSelf)
             self?.mSliced?.mJobId = (useful["job_id"] as? String) ?? ""
             self?.mSliced?.mJobSign = (useful["sign"] as? String) ?? ""
             self?.mSliced?.mPerSlicedSize = (useful["chunk_size"] as? UInt64) ?? 1
